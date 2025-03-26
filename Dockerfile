@@ -36,12 +36,10 @@ RUN apt-get update && \
 
 COPY --from=builder /app/telexec /app/telexec
 COPY --from=builder /app/.env /app/.env
-COPY --from=builder /app/out /app/out
 
 RUN chown -R nobody:nogroup /app && \
     chmod -R 750 /app && \
-    mkdir -p /app/out && \
-    chmod 770 /app/out
+    mkdir -p /app/out
 
 USER nobody
 
