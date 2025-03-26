@@ -3,6 +3,11 @@ FROM ubuntu:22.04
 # Set environment untuk non-interactive
 ENV DEBIAN_FRONTEND=noninteractive
 
+WORKDIR /app
+
+# Copy source files
+COPY . .
+
 # Install runtime dependencies and build tools tanpa interaksi
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -22,11 +27,6 @@ RUN wget https://go.dev/dl/go1.24.0.linux-amd64.tar.gz -O /tmp/go.tar.gz && \
 
 ENV GOROOT=/usr/local/go
 ENV PATH="${GOROOT}/bin:${PATH}"
-
-WORKDIR /app
-
-# Copy source files
-COPY . .
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o telexec .
