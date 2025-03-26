@@ -5,9 +5,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /app
 
-# Copy source files
-COPY . .
-
 # Install runtime dependencies and build tools tanpa interaksi
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -20,13 +17,16 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/* \
     && ln -fs /usr/share/zoneinfo/UTC /etc/localtime
 
-# Install Go
+# Install Go dan copy binary ke /app
 RUN wget https://go.dev/dl/go1.24.0.linux-amd64.tar.gz -O /tmp/go.tar.gz && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
-    rm /tmp/go.tar.gz
+    rm /tmp/go.tar.gz && \
+    cp /usr/local/go/bin/go /app/go
 
-ENV GOROOT=/usr/local/go
-ENV PATH="${GOROOT}/bin:${PATH}"
+ENV PATH="/app:/usr/local/go/bin:${PATH}"
+
+# Copy source files
+COPY . .
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o telexec .
