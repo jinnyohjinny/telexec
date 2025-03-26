@@ -4,11 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"sync"
 	"time"
 )
 
 type CmdOutputWriter struct {
 	TimeoutSecond int
+	WorkDir       string
+	mu            sync.Mutex
 }
 
 type CmdExecResult struct {
@@ -16,21 +19,33 @@ type CmdExecResult struct {
 	Stderr []byte
 }
 
+func NewCmdOutputWriter(timeout int, workDir string) *CmdOutputWriter {
+	return &CmdOutputWriter{
+		TimeoutSecond: timeout,
+		WorkDir:       workDir,
+	}
+}
+
 func (c *CmdOutputWriter) ExecOutput(command string) (outOk, outErr []byte, err error) {
 	chResp := make(chan CmdExecResult)
 
 	executor := "/bin/bash"
-
 	cmd := exec.Command(executor, "-c", command)
 
-	go func(c chan CmdExecResult, cmd *exec.Cmd) {
+	if c.WorkDir != "" {
+		cmd.Dir = c.WorkDir
+	}
+
+	go func(chn chan CmdExecResult, cmd *exec.Cmd) {
+		c.mu.Lock()
+		defer c.mu.Unlock()
 		out, err := cmd.CombinedOutput()
 		errOut := []byte("")
 		if err != nil {
 			errOut = []byte(err.Error())
 		}
 
-		c <- CmdExecResult{Stdout: out, Stderr: errOut}
+		chn <- CmdExecResult{Stdout: out, Stderr: errOut}
 	}(chResp, cmd)
 
 	if c.TimeoutSecond == 0 {

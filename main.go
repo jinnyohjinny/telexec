@@ -1,6 +1,8 @@
 package main
 
-import "github.com/jinnyohjinny/telexec/handler"
+import (
+	"github.com/jinnyohjinny/telexec/handler"
+)
 
 func main() {
 	handler.Begin()

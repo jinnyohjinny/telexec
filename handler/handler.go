@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/jinnyohjinny/telexec/controller"
@@ -50,10 +51,10 @@ func initBot() error {
 	return err
 }
 
-func cmdHandler(log zerolog.Logger, commandExec controller.CmdOutputWriter) {
-	log.Info().Msg("Registering /cmd handler")
+func cmdHandler(log zerolog.Logger, commandExec *controller.CmdOutputWriter) {
+	log.Info().Msg("Registering /run handler")
 
-	bot.Handle("/cmd", func(ctx tele.Context) error {
+	bot.Handle("/run", func(ctx tele.Context) error {
 		if !ctx.Message().Private() {
 			_, err := ctx.Bot().Send(ctx.Chat(), "Please use this command in private chat")
 			return err
@@ -85,6 +86,29 @@ func cmdHandler(log zerolog.Logger, commandExec controller.CmdOutputWriter) {
 			Msg("Received text message")
 		return nil
 	})
+
+	bot.Handle("/getfile", func(ctx tele.Context) error {
+		filename := ctx.Message().Payload
+		if filename == "" {
+			return ctx.Reply("Please specify filename, e.g. /getfile main.go")
+		}
+
+		log.Info().Str("filename", filename).Msg("File download requested")
+
+		if _, err := os.Stat(filename); os.IsNotExist(err) {
+			log.Error().Str("filename", filename).Msg("File not found")
+			return ctx.Reply("File not found")
+		}
+
+		file := &tele.Document{
+			File:     tele.FromDisk(filename),
+			FileName: filename,
+			MIME:     "text/plain",
+		}
+
+		_, err := ctx.Bot().Send(ctx.Chat(), file)
+		return err
+	})
 }
 
 func Begin() {
@@ -95,9 +119,13 @@ func Begin() {
 	}
 
 	log := utils.InitLog()
-	cmdExec := controller.CmdOutputWriter{
-		TimeoutSecond: 10,
+
+	outDir := filepath.Join(".", "out")
+	err := os.MkdirAll(outDir, 0755)
+	if err != nil {
+		log.Error().Err(err).Str("path", outDir).Msg("Gagal membuat direktori")
 	}
+	cmdExec := controller.NewCmdOutputWriter(10, outDir)
 
 	cmdHandler(log, cmdExec)
 
