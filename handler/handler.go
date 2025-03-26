@@ -6,11 +6,30 @@ import (
 	"os"
 	"time"
 
+	"github.com/jinnyohjinny/telexec/controller"
+	"github.com/jinnyohjinny/telexec/utils"
 	"github.com/joho/godotenv"
+	"github.com/rs/zerolog"
 	tele "gopkg.in/telebot.v4"
 )
 
 var bot *tele.Bot
+
+const (
+	formatOk = `
+Running : %s
+===========
+Out :
+===========
+ %s`
+
+	formatErr = `
+Running : %s
+===========
+Err :
+===========
+ %s`
+)
 
 func initBot() error {
 	if err := godotenv.Load(); err != nil {
@@ -31,21 +50,39 @@ func initBot() error {
 	return err
 }
 
-func cmdHandler() {
-	bot.Handle("/cmd", func(ctx tele.Context) error {
-		log.Printf("Received command from %d", ctx.Sender().ID)
+func cmdHandler(log zerolog.Logger, commandExec controller.CmdOutputWriter) {
+	log.Info().Msg("Registering /cmd handler")
 
+	bot.Handle("/cmd", func(ctx tele.Context) error {
 		if !ctx.Message().Private() {
 			_, err := ctx.Bot().Send(ctx.Chat(), "Please use this command in private chat")
 			return err
 		}
 
+		commandName := ctx.Message().Payload
+		log.Info().Str("state", "exec").Msg(commandName)
+
+		log.Debug().Msg("Before execution")
+		outOk, outErr, errExec := commandExec.ExecOutput(commandName)
+		log.Debug().
+			Str("output", string(outOk)).
+			Str("error", string(outErr)).
+			Err(errExec).
+			Msg("After ExecOutput")
+
+		if errExec != nil {
+			log.Error().Str("state", "exec").Msg(errExec.Error())
+			return ctx.Reply(fmt.Sprintf(formatErr, commandName, outErr))
+		}
 		fmt.Printf("Payload: %s\n", ctx.Message().Payload)
-		return ctx.Send("Hello world!")
+		return ctx.Reply(fmt.Sprintf(formatOk, commandName, outOk))
 	})
 
 	bot.Handle(tele.OnText, func(ctx tele.Context) error {
-		log.Printf("Received text: %s", ctx.Text())
+		log.Info().
+			Str("text", ctx.Text()).
+			Bool("private", ctx.Message().Private()).
+			Msg("Received text message")
 		return nil
 	})
 }
@@ -57,9 +94,19 @@ func Begin() {
 		log.Fatalf("Failed to initialize bot: %v", err)
 	}
 
-	cmdHandler()
+	log := utils.InitLog()
+	cmdExec := controller.CmdOutputWriter{
+		TimeoutSecond: 10,
+	}
 
-	log.Println("Handlers registered, starting bot...")
+	cmdHandler(log, cmdExec)
 
+	me := bot.Me
+	log.Info().
+		Str("username", me.Username).
+		Str("first_name", me.FirstName).
+		Msg("Bot initialized successfully")
+
+	log.Info().Msg("Starting bot polling...")
 	bot.Start()
 }
