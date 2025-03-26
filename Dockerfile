@@ -15,29 +15,26 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/* \
     && ln -fs /usr/share/zoneinfo/UTC /etc/localtime
 
-# Install Go dan copy binary ke /app
+# Install Go
 RUN wget https://go.dev/dl/go1.24.0.linux-amd64.tar.gz -O /tmp/go.tar.gz && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
-    rm /tmp/go.tar.gz && \
-    mkdir -p /app && \
-    cp /usr/local/go/bin/go /app/go
+    rm /tmp/go.tar.gz
 
-# Set PATH untuk mencari binary go di /app terlebih dahulu
-ENV PATH="/app:/usr/local/go/bin:${PATH}"
+# Install Air untuk live reload
+RUN go install github.com/cosmtrek/air@latest
+
+ENV PATH="/root/go/bin:/usr/local/go/bin:${PATH}"
 ENV GOROOT=/usr/local/go
+ENV GOPATH=/root/go
 
 WORKDIR /app
+
+# Copy semua file termasuk konfigurasi Air (jika ada)
 COPY . .
 
-# Verifikasi go command
-RUN go version && \
-    which go && \
-    ls -la /app/go
+RUN air init
 
-# Build aplikasi
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o telexec .
-
-# Prepare runtime environment
+# Buat direktori out jika diperlukan
 RUN mkdir -p /app/out && \
     chown -R nobody:nogroup /app && \
     chmod -R 750 /app && \
@@ -45,4 +42,5 @@ RUN mkdir -p /app/out && \
 
 USER nobody
 
-ENTRYPOINT ["/app/telexec"]
+# Gunakan Air sebagai entrypoint
+ENTRYPOINT ["air"]
