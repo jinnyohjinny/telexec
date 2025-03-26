@@ -15,26 +15,29 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/* \
     && ln -fs /usr/share/zoneinfo/UTC /etc/localtime
 
-# Install Go
+# Install Go dan setup environment dalam satu layer
 RUN wget https://go.dev/dl/go1.24.0.linux-amd64.tar.gz -O /tmp/go.tar.gz && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
-    rm /tmp/go.tar.gz
+    rm /tmp/go.tar.gz && \
+    mkdir -p /root/go
+
+# Set environment variables untuk Go
+ENV GOROOT=/usr/local/go
+ENV GOPATH=/root/go
+ENV PATH=$GOROOT/bin:$GOPATH/bin:$PATH
+
+WORKDIR /app
 
 # Install Air untuk live reload
 RUN go install github.com/cosmtrek/air@latest
 
-ENV PATH="/root/go/bin:/usr/local/go/bin:${PATH}"
-ENV GOROOT=/usr/local/go
-ENV GOPATH=/root/go
-
-WORKDIR /app
-
-# Copy semua file termasuk konfigurasi Air (jika ada)
+# Copy source code
 COPY . .
 
-RUN air init
+# Initialize air (jika diperlukan)
+RUN air init || true  # || true untuk skip error jika file config sudah ada
 
-# Buat direktori out jika diperlukan
+# Prepare runtime environment
 RUN mkdir -p /app/out && \
     chown -R nobody:nogroup /app && \
     chmod -R 750 /app && \
@@ -42,5 +45,4 @@ RUN mkdir -p /app/out && \
 
 USER nobody
 
-# Gunakan Air sebagai entrypoint
 ENTRYPOINT ["air"]
