@@ -1,6 +1,9 @@
 FROM ubuntu:22.04
 
-# Install runtime dependencies and build tools
+# Set environment untuk non-interactive
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install runtime dependencies and build tools tanpa interaksi
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -8,7 +11,9 @@ RUN apt-get update && \
     git \
     wget \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -fs /usr/share/zoneinfo/UTC /etc/localtime
 
 # Install Go
 RUN wget https://go.dev/dl/go1.24.0.linux-amd64.tar.gz -O /tmp/go.tar.gz && \
