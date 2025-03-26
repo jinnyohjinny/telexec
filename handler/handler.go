@@ -13,39 +13,53 @@ import (
 var bot *tele.Bot
 
 func initBot() error {
-
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
+	if err := godotenv.Load(); err != nil {
+		return fmt.Errorf("error loading .env file: %v", err)
 	}
 
 	token := os.Getenv("TOKEN")
 	if token == "" {
-		log.Fatal("token empty")
+		return fmt.Errorf("bot token is empty")
 	}
 
-	var errBot error
-
-	bot, errBot = tele.NewBot(tele.Settings{
+	var err error
+	bot, err = tele.NewBot(tele.Settings{
 		Token:  token,
-		Poller: &tele.LongPoller{Timeout: 10 * time.Second},
+		Poller: &tele.LongPoller{Timeout: 30 * time.Second},
 	})
 
-	return errBot
+	return err
 }
 
-func streamChat() {
-	bot.Handle("/halo", func(ctx tele.Context) error {
-		return ctx.Send("Halo dunia")
+func cmdHandler() {
+	bot.Handle("/cmd", func(ctx tele.Context) error {
+		log.Printf("Received command from %d", ctx.Sender().ID)
+
+		if !ctx.Message().Private() {
+			_, err := ctx.Bot().Send(ctx.Chat(), "Please use this command in private chat")
+			return err
+		}
+
+		fmt.Printf("Payload: %s\n", ctx.Message().Payload)
+		return ctx.Send("Hello world!")
+	})
+
+	bot.Handle(tele.OnText, func(ctx tele.Context) error {
+		log.Printf("Received text: %s", ctx.Text())
+		return nil
 	})
 }
 
 func Begin() {
-	fmt.Println("Bot dimulai...")
+	log.Println("Starting bot...")
+
 	if err := initBot(); err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to initialize bot: %v", err)
 	}
 
-	streamChat()
+	cmdHandler()
+
+	log.Println("Handlers registered, starting bot...")
+
 	bot.Start()
 }
