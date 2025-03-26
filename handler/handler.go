@@ -34,7 +34,7 @@ func initBot() error {
 	var err error
 	bot, err = tele.NewBot(tele.Settings{
 		Token:  token,
-		Poller: &tele.LongPoller{Timeout: 30 * time.Second},
+		Poller: &tele.LongPoller{Timeout: 10 * time.Second},
 		OnError: func(err error, ctx tele.Context) {
 			log.Printf("Telebot error: %v", err)
 		},
