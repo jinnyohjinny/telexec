@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -14,11 +16,6 @@ type CmdOutputWriter struct {
 	mu            sync.Mutex
 }
 
-type CmdExecResult struct {
-	Stdout []byte
-	Stderr []byte
-}
-
 func NewCmdOutputWriter(timeout int, workDir string) *CmdOutputWriter {
 	return &CmdOutputWriter{
 		TimeoutSecond: timeout,
@@ -26,53 +23,39 @@ func NewCmdOutputWriter(timeout int, workDir string) *CmdOutputWriter {
 	}
 }
 
-func (c *CmdOutputWriter) ExecOutput(command string) (outOk, outErr []byte, err error) {
-	chResp := make(chan CmdExecResult)
+func (c *CmdOutputWriter) ExecOutput(command string) ([]byte, []byte, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	executor := "/bin/bash"
-	cmd := exec.Command(executor, "-c", command)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.TimeoutSecond)*time.Second)
+	defer cancel()
 
+	cmd := exec.CommandContext(ctx, "/bin/bash", "-c", command)
 	if c.WorkDir != "" {
 		cmd.Dir = c.WorkDir
 	}
 
-	go func(chn chan CmdExecResult, cmd *exec.Cmd) {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		out, err := cmd.CombinedOutput()
-		errOut := []byte("")
-		if err != nil {
-			errOut = []byte(err.Error())
-		}
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
-		chn <- CmdExecResult{Stdout: out, Stderr: errOut}
-	}(chResp, cmd)
+	err := cmd.Run()
 
-	if c.TimeoutSecond == 0 {
-		result := <-chResp
-		outOk = result.Stdout
-		outErr = result.Stderr
-		return
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return nil, []byte("ERROR: Command timed out"), ctx.Err()
 	}
 
-	select {
-	case result := <-chResp:
-		outOk = result.Stdout
-		outErr = result.Stderr
-		cmd.Process.Kill()
-	case <-time.After(time.Second * time.Duration(c.TimeoutSecond)):
-		cmd.Process.Kill()
-		errMsg := "TIMEOUT: EXCEEDED -- Process killed"
-		err = errors.New(errMsg)
-		outErr = []byte(errMsg)
+	if stdout.Len() == 0 && stderr.Len() == 0 && err == nil {
+		stdout.WriteString("Command executed successfully (no output)")
 	}
-	return
+
+	return stdout.Bytes(), stderr.Bytes(), err
 }
 
-func (c *CmdOutputWriter) ExecHeadOutput(command string) (outOk, outErr []byte, err error) {
-	return c.ExecOutput(fmt.Sprintf("%s | head", command))
+func (c *CmdOutputWriter) ExecHeadOutput(command string) ([]byte, []byte, error) {
+	return c.ExecOutput(fmt.Sprintf("%s | head -n 20", command))
 }
 
-func (c *CmdOutputWriter) ExecTailOutput(command string) (outOk, outErr []byte, err error) {
-	return c.ExecOutput(fmt.Sprintf("%s | tail", command))
+func (c *CmdOutputWriter) ExecTailOutput(command string) ([]byte, []byte, error) {
+	return c.ExecOutput(fmt.Sprintf("%s | tail -n 20", command))
 }
